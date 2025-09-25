@@ -166,7 +166,7 @@ internal class Program
                                         Albumcover = newItem.AlbumCover,
                                         Artist = newItem.Artist,
                                         Databinary = ms.ToArray(),
-                                        Epoch = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeSeconds(),
+                                        Epoch = new DateTimeOffset(DateTime.UtcNow).ToUnixTimeMilliseconds(),
                                         Kind = newItem.Kind,
                                         User = newItem.UserUuid
                                     });
@@ -277,14 +277,14 @@ internal class Program
                         var mailMessage = new MailMessage
                         {
                             From = new MailAddress("xiey0@qq.com"),
-                            Subject = "×ªÎÄ±¾Íê³É",
+                            Subject = "è½¬æ–‡æœ¬å®Œæˆ",
                             Attachments =
                             {
                                 new(new MemoryStream(File.ReadAllBytes($"{outputDir}/{newItem.Uuid}.tar")),
-                                    "½á¹û.tar",
+                                    "ç»“æžœ.tar",
                                     "application/x-zip-compressed"),
                             },
-                            Body = "¼û¸½¼þ",
+                            Body = "è§é™„ä»¶",
                             IsBodyHtml = true
                         };
                         mailMessage.To.Add(new MailAddress(newItem.Email));
@@ -407,9 +407,9 @@ internal class Program
 
         CleanupHandler = (_, e) =>
         {
-            if (e is ConsoleCancelEventArgs)
+            if (e is ConsoleCancelEventArgs args)
             {
-                ((ConsoleCancelEventArgs)e).Cancel = true;
+                args.Cancel = true;
             }
 
             Console.WriteLine("Cleaning up...");
@@ -446,6 +446,8 @@ internal class Program
                     .WithHeaders("Content-Type").AllowCredentials();
             });
         });
+        builder.Services.AddSwaggerGen(); 
+
 
         // Required for session storage. 
         builder.Services.AddDistributedMemoryCache();
@@ -456,6 +458,7 @@ internal class Program
             o.Cookie.IsEssential = true;
             o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
         });
+
 
         // Payload size
         builder.Services.Configure<KestrelServerOptions>(o => o.Limits.MaxRequestBodySize = 1_000_000_000);
@@ -472,6 +475,8 @@ internal class Program
         if (app.Environment.IsDevelopment())
         {
             app.MapOpenApi();
+            app.UseSwagger();
+            app.UseSwaggerUI(); 
         }
 
         if (!app.Environment.IsDevelopment())
@@ -482,21 +487,16 @@ internal class Program
         app.UseCors("All");
 
         app.UseAuthorization();
-
         app.UseSession();
 
 
         // Datas
         var cache = new List<QueueContext>();
-
-        Task.Run(() =>
+        Timer timer = new Timer((e) =>
         {
-            while (true)
-            {
-                cache.Clear();
-                Task.Delay(60 * 60 * 24).GetAwaiter().GetResult();
-            }
-        }); 
+            cache.Clear();
+        }, null, TimeSpan.Zero, TimeSpan.FromDays(2));
+        
 
         app.MapAllProcessingEndpoints(res.Item1)
             .MapAllGetterEndpoints(cache)
