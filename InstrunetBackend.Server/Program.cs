@@ -14,6 +14,8 @@ using System.Net.Mail;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace InstrunetBackend.Server;
 
@@ -446,8 +448,23 @@ internal class Program
                     .WithHeaders("Content-Type").AllowCredentials();
             });
         });
-        builder.Services.AddSwaggerGen(); 
-
+        builder.Services.AddSwaggerGen();
+        builder.Services.AddRateLimiter(_ =>
+        {
+            _.AddPolicy<string>("UploadRateLimiting", context =>
+            {
+                var ip = context.Request.Host.Host;
+                return RateLimitPartition.GetFixedWindowLimiter(ip, _ => new()
+                {
+                    PermitLimit = 6, AutoReplenishment = true, Window = TimeSpan.FromMinutes(10)
+                });
+            });
+            _.OnRejected = (context, token) =>
+            {
+                context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                return ValueTask.CompletedTask;
+            };
+        });
 
         // Required for session storage. 
         builder.Services.AddDistributedMemoryCache();
@@ -471,6 +488,8 @@ internal class Program
 
         var app = builder.Build();
 
+        app.UseRateLimiter(); 
+        
         // Configure the HTTP request pipeline.
         if (app.Environment.IsDevelopment())
         {
